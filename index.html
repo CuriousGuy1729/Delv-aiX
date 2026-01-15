@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Delv · Public Room</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<style>
+:root{
+  --bg:#020617;
+  --panel:#020617e6;
+  --accent:#7c3aed;
+  --accent2:#22d3ee;
+  --text:#e5e7eb;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  height:100vh;
+  background:
+    radial-gradient(circle at 20% 10%, #312e81, transparent 45%),
+    radial-gradient(circle at 80% 90%, #4c1d95, transparent 45%),
+    #020617;
+  color:var(--text);
+  font-family:system-ui;
+}
+
+/* LOGIN */
+.login{
+  height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+.login-box{
+  width:320px;
+  padding:24px;
+  border-radius:20px;
+  background:var(--panel);
+  border:1px solid rgba(255,255,255,.1);
+}
+.login-box h1{text-align:center}
+.login-box input{
+  width:100%;
+  padding:12px;
+  border-radius:14px;
+  background:#020617;
+  border:none;
+  color:white;
+}
+.login-box button{
+  width:100%;
+  margin-top:12px;
+  padding:12px;
+  border-radius:14px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;
+  font-weight:700;
+  cursor:pointer;
+}
+
+/* CHAT */
+.app{display:none;height:100vh;flex-direction:column;padding:12px}
+.header{
+  padding:12px;
+  background:var(--panel);
+  border-radius:14px;
+  margin-bottom:8px;
+  display:flex;
+  justify-content:space-between;
+}
+.chat{
+  flex:1;
+  overflow-y:auto;
+  background:var(--panel);
+  border-radius:20px;
+  padding:14px;
+}
+.msg{
+  margin-bottom:14px;
+}
+.name{
+  font-size:12px;
+  opacity:.6;
+}
+.bubble{
+  background:rgba(255,255,255,.07);
+  padding:10px 14px;
+  border-radius:14px;
+  max-width:70%;
+}
+.input{
+  display:flex;
+  gap:8px;
+  margin-top:8px;
+}
+textarea{
+  flex:1;
+  height:50px;
+  border-radius:14px;
+  border:none;
+  background:#020617;
+  color:white;
+  padding:12px;
+}
+button{
+  width:52px;
+  border-radius:50%;
+  border:none;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div class="login" id="login">
+  <div class="login-box">
+    <h1>⚡ Delv</h1>
+    <input id="nameInput" placeholder="Username" />
+    <button onclick="enter()">Enter</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="app">
+  <div class="header">
+    <div>🌍 Public Chat</div>
+    <div id="me"></div>
+  </div>
+
+  <div class="chat" id="chat"></div>
+
+  <div class="input">
+    <textarea id="input" placeholder="Type @grok / @gemini / message"></textarea>
+    <button onclick="send()">➤</button>
+  </div>
+</div>
+
+<script>
+/* ========= CORE FIX ========= */
+const channel = new BroadcastChannel("delv-public-room");
+/* ============================ */
+
+const API="https://rrasd12ww-chatbot-ai.hf.space/chat";
+
+let username = localStorage.getItem("delv_user");
+
+const login=document.getElementById("login");
+const app=document.getElementById("app");
+const chat=document.getElementById("chat");
+const input=document.getElementById("input");
+const me=document.getElementById("me");
+
+if(username) start();
+
+function enter(){
+  const u=document.getElementById("nameInput").value.trim();
+  if(!u) return;
+  localStorage.setItem("delv_user",u);
+  username=u;
+  start();
+}
+
+function start(){
+  login.style.display="none";
+  app.style.display="flex";
+  me.textContent=username;
+}
+
+function addMsg(name,text){
+  const d=document.createElement("div");
+  d.className="msg";
+  d.innerHTML=`
+    <div class="name">${name}</div>
+    <div class="bubble">${text}</div>
+  `;
+  chat.appendChild(d);
+  chat.scrollTop=chat.scrollHeight;
+}
+
+/* RECEIVE */
+channel.onmessage = e=>{
+  addMsg(e.data.user,e.data.text);
+};
+
+/* SEND */
+async function send(){
+  const text=input.value.trim();
+  if(!text) return;
+  input.value="";
+
+  channel.postMessage({user:username,text});
+
+  /* AI ping */
+  const m=text.match(/@(grok|gemini|openai|perplexity|deepseek|glm)/);
+  if(!m) return;
+
+  try{
+    const r=await fetch(API,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({message:text,model:m[1]})
+    });
+    const j=await r.json();
+    channel.postMessage({user:m[1].toUpperCase(),text:j.reply});
+  }catch{
+    channel.postMessage({user:"System",text:"AI offline"});
+  }
+}
+</script>
+
+</body>
+</html>
