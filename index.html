@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Delvx Global Chat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body{
+  margin:0;
+  height:100vh;
+  background:radial-gradient(circle at 20% 10%, #312e81, transparent 45%),
+             radial-gradient(circle at 80% 90%, #4c1d95, transparent 45%),
+             #020617;
+  color:#e5e7eb;
+  font-family:system-ui;
+}
+.login,.app{
+  height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+.app{display:none;flex-direction:column;padding:12px}
+.box{
+  width:320px;
+  padding:20px;
+  background:#020617e6;
+  border-radius:18px;
+}
+input,textarea{
+  width:100%;
+  padding:10px;
+  border-radius:12px;
+  border:none;
+  outline:none;
+  background:#020617;
+  color:white;
+}
+button{
+  width:100%;
+  margin-top:10px;
+  padding:10px;
+  border-radius:12px;
+  border:none;
+  background:linear-gradient(135deg,#7c3aed,#22d3ee);
+  font-weight:700;
+  cursor:pointer;
+}
+.chat{
+  flex:1;
+  width:100%;
+  background:#020617e6;
+  border-radius:18px;
+  padding:12px;
+  overflow-y:auto;
+}
+.msg{margin-bottom:12px}
+.name{font-size:12px;opacity:.6}
+.bubble{
+  background:rgba(255,255,255,.08);
+  padding:10px 14px;
+  border-radius:14px;
+  max-width:70%;
+}
+.input{
+  display:flex;
+  gap:8px;
+  margin-top:8px;
+}
+.send{
+  width:52px;
+  border-radius:50%;
+  border:none;
+  background:linear-gradient(135deg,#7c3aed,#22d3ee);
+}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div class="login" id="login">
+  <div class="box">
+    <h2>⚡ Delvx</h2>
+    <input id="username" placeholder="Enter username">
+    <button onclick="enter()">Enter Chat</button>
+  </div>
+</div>
+
+<!-- CHAT -->
+<div class="app" id="app">
+  <div class="chat" id="chat"></div>
+  <div class="input">
+    <textarea id="input" placeholder="Type message or @grok"></textarea>
+    <button class="send" onclick="send()">➤</button>
+  </div>
+</div>
+
+<script>
+/* ===== CONFIG ===== */
+const BACKEND = "https://Rrasd12ww-Delvx-backend.hf.space";
+const AI_API = "https://rrasd12ww-chatbot-ai.hf.space/chat";
+
+/* ===== STATE ===== */
+let user = localStorage.getItem("delvx_user");
+let lastSeen = 0;
+
+const login = document.getElementById("login");
+const app = document.getElementById("app");
+const chat = document.getElementById("chat");
+const input = document.getElementById("input");
+
+if(user) start();
+
+/* ===== LOGIN ===== */
+function enter(){
+  const u = document.getElementById("username").value.trim();
+  if(!u) return;
+  user = u;
+  localStorage.setItem("delvx_user", u);
+  start();
+}
+
+function start(){
+  login.style.display="none";
+  app.style.display="flex";
+  poll();
+}
+
+/* ===== UI ===== */
+function addMsg(name,text){
+  const d=document.createElement("div");
+  d.className="msg";
+  d.innerHTML=`<div class="name">${name}</div><div class="bubble">${text}</div>`;
+  chat.appendChild(d);
+  chat.scrollTop=chat.scrollHeight;
+}
+
+/* ===== POLLING ===== */
+async function poll(){
+  try{
+    const r = await fetch(BACKEND + "/messages?since=" + lastSeen);
+    const msgs = await r.json();
+    msgs.forEach(m=>{
+      addMsg(m.user, m.text);
+      lastSeen = Math.max(lastSeen, m.timestamp);
+    });
+  }catch{}
+  setTimeout(poll, 1000);
+}
+
+/* ===== SEND ===== */
+async function send(){
+  const text = input.value.trim();
+  if(!text) return;
+  input.value="";
+  addMsg(user,text);
+
+  await fetch(BACKEND + "/send",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({user,text,timestamp:Date.now()})
+  });
+
+  /* AI ping */
+  const m = text.match(/@(grok|gemini-fast|openai-fast|perplexity-fast|deepseek|glm)/);
+  if(!m) return;
+
+  try{
+    const r = await fetch(AI_API,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({message:text,model:m[1]})
+    });
+    const raw = await r.text();
+    const j = JSON.parse(raw);
+    const reply = j.reply || j.response || j.generated_text || j.text || "No reply";
+
+    addMsg(m[1].toUpperCase(), reply);
+
+    await fetch(BACKEND + "/send",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({user:m[1].toUpperCase(),text:reply,timestamp:Date.now()})
+    });
+  }catch{
+    addMsg("System","AI unavailable");
+  }
+}
+</script>
+
+</body>
+</html>
