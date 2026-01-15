@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>⚡ Delvx</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+:root{
+  --bg:#020617;
+  --panel:#020617ee;
+  --accent:#7c3aed;
+  --accent2:#22d3ee;
+  --text:#e5e7eb;
+  --muted:#9ca3af;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;height:100vh;
+  font-family:system-ui;
+  background:
+    radial-gradient(circle at 20% 10%, #312e81, transparent 45%),
+    radial-gradient(circle at 80% 90%, #4c1d95, transparent 45%),
+    #020617;
+  color:var(--text);
+}
+
+/* LOGIN */
+.login{
+  height:100vh;display:flex;align-items:center;justify-content:center;
+}
+.login-box{
+  width:320px;padding:24px;border-radius:20px;
+  background:var(--panel);
+  box-shadow:0 0 40px rgba(124,58,237,.35);
+}
+.login-box input{
+  width:100%;padding:12px;border:none;border-radius:14px;
+  background:#020617;color:white;
+}
+.login-box button{
+  width:100%;margin-top:12px;padding:12px;border:none;
+  border-radius:14px;font-weight:700;cursor:pointer;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+}
+
+/* APP */
+.app{display:none;height:100vh;flex-direction:column;padding:12px}
+.header{
+  padding:12px 16px;border-radius:16px;
+  background:var(--panel);
+  margin-bottom:8px;
+  display:flex;justify-content:space-between;
+}
+.chat{
+  flex:1;overflow-y:auto;
+  background:var(--panel);
+  border-radius:20px;
+  padding:16px;
+}
+.msg{margin-bottom:16px;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+.name{font-size:12px;color:var(--muted);margin-bottom:4px}
+.bubble{
+  display:inline-block;
+  padding:12px 16px;
+  border-radius:16px;
+  background:rgba(255,255,255,.08);
+  box-shadow:0 0 18px rgba(0,0,0,.4);
+  max-width:75%;
+}
+
+/* INPUT */
+.input{display:flex;gap:8px;margin-top:8px;position:relative}
+textarea{
+  flex:1;height:56px;padding:14px;
+  border-radius:16px;border:none;
+  background:#020617;color:white;
+}
+.send{
+  width:56px;border-radius:50%;
+  border:none;cursor:pointer;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  font-size:20px;
+}
+
+/* MODEL PICKER */
+.picker{
+  position:absolute;bottom:70px;left:0;
+  width:260px;display:none;
+  background:var(--panel);
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.1);
+  overflow:hidden;
+}
+.pick{
+  padding:12px 14px;cursor:pointer;
+}
+.pick:hover{background:rgba(255,255,255,.08)}
+</style>
+</head>
+
+<body>
+
+<div class="login" id="login">
+  <div class="login-box">
+    <h2>⚡ Delvx</h2>
+    <input id="username" placeholder="Username">
+    <button onclick="enter()">Enter</button>
+  </div>
+</div>
+
+<div class="app" id="app">
+  <div class="header">
+    <div>🌍 Public Chat</div>
+    <div id="me"></div>
+  </div>
+
+  <div class="chat" id="chat"></div>
+
+  <div class="input">
+    <textarea id="input" placeholder="Type @ to call a model…"></textarea>
+    <button class="send" onclick="send()">➤</button>
+
+    <div class="picker" id="picker">
+      <div class="pick" onclick="pick('grok')">@grok</div>
+      <div class="pick" onclick="pick('openai-fast')">@openai-fast</div>
+      <div class="pick" onclick="pick('gemini-fast')">@gemini-fast</div>
+      <div class="pick" onclick="pick('perplexity-fast')">@perplexity-fast</div>
+      <div class="pick" onclick="pick('deepseek')">@deepseek</div>
+      <div class="pick" onclick="pick('glm')">@glm</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CHAT_BACKEND = "https://Rrasd12ww-Delvx-backend.hf.space";
+const AI_BACKEND   = "https://rrasd12ww-chatbot-ai.hf.space/chat";
+
+let user = localStorage.getItem("delvx_user");
+let lastSeen = 0;
+
+const login = document.getElementById("login");
+const app = document.getElementById("app");
+const chat = document.getElementById("chat");
+const input = document.getElementById("input");
+const picker = document.getElementById("picker");
+const me = document.getElementById("me");
+
+if(user) start();
+
+function enter(){
+  const u = document.getElementById("username").value.trim();
+  if(!u) return;
+  user=u;localStorage.setItem("delvx_user",u);
+  start();
+}
+function start(){
+  login.style.display="none";
+  app.style.display="flex";
+  me.textContent=user;
+  poll();
+}
+function add(name,text){
+  const d=document.createElement("div");
+  d.className="msg";
+  d.innerHTML=`<div class="name">${name}</div><div class="bubble">${text}</div>`;
+  chat.appendChild(d);
+  chat.scrollTop=chat.scrollHeight;
+}
+
+/* Poll chat */
+async function poll(){
+  try{
+    const r=await fetch(`${CHAT_BACKEND}/messages?since=${lastSeen}`);
+    const msgs=await r.json();
+    msgs.forEach(m=>{
+      add(m.username,m.text);
+      lastSeen=Math.max(lastSeen,m.timestamp);
+    });
+  }catch{}
+  setTimeout(poll,1000);
+}
+
+/* Send message */
+async function send(){
+  const text=input.value.trim();
+  if(!text) return;
+  input.value="";
+  add(user,text);
+
+  await fetch(`${CHAT_BACKEND}/send`,{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({username:user,text,timestamp:Date.now()})
+  });
+
+  const m=text.match(/@(grok|openai-fast|gemini-fast|perplexity-fast|deepseek|glm)/);
+  if(!m) return;
+
+  const aiName=m[1].toUpperCase();
+  add(aiName,"⏳ thinking…");
+
+  try{
+    const r=await fetch(AI_BACKEND,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({message:text,model:m[1]})
+    });
+
+    const raw=await r.text();
+    let reply="";
+    try{
+      const j=JSON.parse(raw);
+      reply=j.reply||j.response||j.generated_text||j.text||j.output||raw;
+    }catch{ reply=raw }
+
+    add(aiName,reply);
+
+    await fetch(`${CHAT_BACKEND}/send`,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({username:aiName,text:reply,timestamp:Date.now()})
+    });
+  }catch{
+    add(aiName,"❌ AI backend not responding");
+  }
+}
+
+/* Picker */
+input.addEventListener("input",()=>{
+  picker.style.display=input.value.endsWith("@")?"block":"none";
+});
+function pick(m){
+  input.value+=m+" ";
+  picker.style.display="none";
+  input.focus();
+}
+</script>
+
+</body>
+</html>
