@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>⚡ Delvx</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+:root{
+  --bg:#020617;
+  --panel:#020617e6;
+  --accent:#7c3aed;
+  --accent2:#22d3ee;
+  --text:#e5e7eb;
+  --muted:#9ca3af;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;height:100vh;
+  font-family:system-ui;
+  background:
+    radial-gradient(circle at 20% 10%, #312e81, transparent 45%),
+    radial-gradient(circle at 80% 90%, #4c1d95, transparent 45%),
+    #020617;
+  color:var(--text);
+}
+
+/* LOGIN */
+.login{
+  height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.login-box{
+  width:320px;
+  padding:22px;
+  background:var(--panel);
+  border-radius:18px;
+}
+.login-box input{
+  width:100%;
+  padding:12px;
+  border:none;
+  border-radius:14px;
+  background:#020617;
+  color:white;
+}
+.login-box button{
+  width:100%;
+  margin-top:12px;
+  padding:12px;
+  border:none;
+  border-radius:14px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  font-weight:700;
+  cursor:pointer;
+}
+
+/* APP */
+.app{
+  display:none;
+  height:100vh;
+  flex-direction:column;
+  padding:12px;
+}
+.header{
+  padding:10px 14px;
+  background:var(--panel);
+  border-radius:14px;
+  margin-bottom:8px;
+  display:flex;
+  justify-content:space-between;
+}
+.chat{
+  flex:1;
+  overflow-y:auto;
+  background:var(--panel);
+  border-radius:18px;
+  padding:14px;
+}
+.msg{margin-bottom:14px}
+.name{font-size:12px;opacity:.6}
+.bubble{
+  background:rgba(255,255,255,.08);
+  padding:10px 14px;
+  border-radius:14px;
+  max-width:75%;
+}
+
+/* INPUT */
+.input{
+  display:flex;
+  gap:8px;
+  margin-top:8px;
+  position:relative;
+}
+textarea{
+  flex:1;
+  height:52px;
+  padding:12px;
+  border-radius:14px;
+  border:none;
+  background:#020617;
+  color:white;
+}
+.send{
+  width:52px;
+  border-radius:50%;
+  border:none;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  cursor:pointer;
+}
+
+/* MODEL PICKER */
+.picker{
+  position:absolute;
+  bottom:60px;
+  left:0;
+  width:260px;
+  background:var(--panel);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:14px;
+  display:none;
+}
+.pick{
+  padding:10px 12px;
+  cursor:pointer;
+}
+.pick:hover{
+  background:rgba(255,255,255,.08);
+}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div class="login" id="login">
+  <div class="login-box">
+    <h2>⚡ Delvx</h2>
+    <input id="username" placeholder="Enter username">
+    <button onclick="enter()">Join</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="app">
+  <div class="header">
+    <div>🌍 Public Chat</div>
+    <div id="me"></div>
+  </div>
+
+  <div class="chat" id="chat"></div>
+
+  <div class="input">
+    <textarea id="input" placeholder="Type @ to ping a model…"></textarea>
+    <button class="send" onclick="send()">➤</button>
+
+    <div class="picker" id="picker">
+      <div class="pick" onclick="pickModel('grok')">@grok</div>
+      <div class="pick" onclick="pickModel('openai-fast')">@openai-fast</div>
+      <div class="pick" onclick="pickModel('gemini-fast')">@gemini-fast</div>
+      <div class="pick" onclick="pickModel('perplexity-fast')">@perplexity-fast</div>
+      <div class="pick" onclick="pickModel('deepseek')">@deepseek</div>
+      <div class="pick" onclick="pickModel('glm')">@glm</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== CONFIG ===== */
+const CHAT_BACKEND = "https://Rrasd12ww-Delvx-backend.hf.space";
+const AI_BACKEND   = "https://rrasd12ww-chatbot-ai.hf.space/chat";
+
+/* ===== STATE ===== */
+let user = localStorage.getItem("delvx_user");
+let lastSeen = 0;
+
+const login = document.getElementById("login");
+const app = document.getElementById("app");
+const chat = document.getElementById("chat");
+const input = document.getElementById("input");
+const picker = document.getElementById("picker");
+const me = document.getElementById("me");
+
+/* ===== LOGIN ===== */
+if(user) start();
+function enter(){
+  const u = document.getElementById("username").value.trim();
+  if(!u) return;
+  user = u;
+  localStorage.setItem("delvx_user", u);
+  start();
+}
+function start(){
+  login.style.display="none";
+  app.style.display="flex";
+  me.textContent = user;
+  poll();
+}
+
+/* ===== UI ===== */
+function addMsg(name,text){
+  const d=document.createElement("div");
+  d.className="msg";
+  d.innerHTML=`<div class="name">${name}</div><div class="bubble">${text}</div>`;
+  chat.appendChild(d);
+  chat.scrollTop=chat.scrollHeight;
+}
+
+/* ===== POLLING ===== */
+async function poll(){
+  try{
+    const r = await fetch(`${CHAT_BACKEND}/messages?since=${lastSeen}`);
+    const msgs = await r.json();
+    msgs.forEach(m=>{
+      addMsg(m.username, m.text);
+      lastSeen = Math.max(lastSeen, m.timestamp);
+    });
+  }catch{}
+  setTimeout(poll,1000);
+}
+
+/* ===== SEND ===== */
+async function send(){
+  const text = input.value.trim();
+  if(!text) return;
+  input.value="";
+  addMsg(user,text);
+
+  await fetch(`${CHAT_BACKEND}/send`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({username:user,text,timestamp:Date.now()})
+  });
+
+  const m = text.match(/@(grok|openai-fast|gemini-fast|perplexity-fast|deepseek|glm)/);
+  if(!m) return;
+
+  try{
+    const r = await fetch(AI_BACKEND,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({message:text,model:m[1]})
+    });
+    const j = await r.json();
+    const reply = j.reply || j.response || j.text || j.generated_text;
+    if(!reply) return;
+
+    addMsg(m[1].toUpperCase(), reply);
+
+    await fetch(`${CHAT_BACKEND}/send`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({username:m[1].toUpperCase(),text:reply,timestamp:Date.now()})
+    });
+  }catch{
+    addMsg("System","AI backend unavailable");
+  }
+}
+
+/* ===== @ PICKER ===== */
+input.addEventListener("input",()=>{
+  picker.style.display = input.value.endsWith("@") ? "block" : "none";
+});
+function pickModel(m){
+  input.value += m + " ";
+  picker.style.display="none";
+  input.focus();
+}
+</script>
+
+</body>
+</html>
